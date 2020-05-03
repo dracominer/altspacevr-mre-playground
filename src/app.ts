@@ -9,12 +9,9 @@ export default class HelloWorld {
 		this.context.onStarted(() => this.started());
 	}
 
-	/**
-	 * Once the context is "started", initialize the app.
-	 */
 	private async started() {
-
 		this.assets = new MRE.AssetContainer(this.context);
+		// Holo handles all of our management of the MRE
 		this.holo = new Hologram(this.context,  true, this.assets, this.baseUrl);
 
 	}
