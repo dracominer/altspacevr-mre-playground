@@ -1,12 +1,12 @@
 
 
-import {AppData, WorldData} from "./saveData";
+import {AppData, WorldData, AccessLevel} from "./saveData";
 
 
-export default class Auth {
+export default class Authenticator {
 
     private sessionID : string;
-    private data : AppData = undefined;
+    private appData : AppData = undefined;
     
 
     public constructor (id : string){
@@ -15,15 +15,28 @@ export default class Auth {
 
     public async loadAuthData(path : string){ 
         // load publically so we can await
-        this.data = new AppData();
-        this.data.loadData(path, this.sessionID); // this not being an async should lock?
-        console.log(this.data.data)
+        this.appData = new AppData(path);
+        this.appData.loadData(this.sessionID); // this not being an async should lock?
+        console.log("Data : " + this.appData.data)
     }
 
     public getData() : WorldData {
-        if(this.data) return undefined; // still loading
-        return this.data.data;
+        if(this.appData) return undefined; // still loading
+        return this.appData.data;
+    }
+    public setData(d : WorldData){
+        this.appData.data = d;
     }
 
-
+    public getAccessLevel(s_guid : string) : AccessLevel {
+		if(this.appData.data.owner == s_guid) return AccessLevel.Owner; // owner rights
+		for (let s of this.appData.data.admins){
+			if(s == s_guid) return AccessLevel.Admin; // admin rights
+		}
+		return AccessLevel.Deny; // no rights
+    }
+    
+    public async save(){
+        this.appData.save(this.sessionID);
+    }
 }

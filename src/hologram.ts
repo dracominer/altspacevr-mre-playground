@@ -1,54 +1,38 @@
 import * as MRE from '@microsoft/mixed-reality-extension-sdk';
 
-import App from './app';
 import { parseGuid, Guid } from '@microsoft/mixed-reality-extension-sdk';
-
-const fs = require("fs");
-
-const saveFile : string = "./public/data.json";
-
-type WorldData = {
-	owner : string;
-	admins : string[];
-
-	displayText : string;
-	
-
-}
-enum AccessLevel  {
-	Deny, Admin, Owner
-}
-
-interface UniverseData {
-	[key:string] : WorldData;
-}
+import Authenticator from "./auth";
+import {WorldData, AccessLevel } from "./saveData";
 
 //const Universe :UniverseData = require(saveFile); // our json data with universal data. Each world will save data using their sessionID in here.
+
 
 export default class Hologram {
 
 	private self : MRE.Actor;
-	private baseURL : string;
+//	private baseURL : string;
 	private spinAnimData : MRE.AnimationData;
-	private data : WorldData  = undefined;
-	private Universe : UniverseData;
+	private auth : Authenticator;
 
     public constructor (private context: MRE.Context, private shouldRotate : boolean, private assets : MRE.AssetContainer, private url : string){
-		this.baseURL = url;
+//		this.baseURL = url;
+		this.auth = new Authenticator(this.context.sessionId);
 		this.initWorldData();		
 	}
 
 	private async initWorldData(){
-		let data : WorldData;
-		let uData : string  = (await this.readData(saveFile));
-		this.Universe = JSON.parse(uData) as UniverseData;
-		if(this.Universe[this.context.sessionId] == undefined){
+		for( const a of this.context.actors){
+			a.destroy();
+		}
+		await this.auth.loadAuthData("./public/data.json");
+
+		if(this.auth.getData() == undefined){
 			console.error("No world data loaded!");
 			this.createInNewWorld()
 		}else{
-			console.log("World data loaded. OWNER : " + data.owner);
+			console.log("World data loaded. OWNER : " + this.auth.getData().owner);
 			this.loadFromOldWorld();
-		}		
+		}
 	}
 
 	private createInNewWorld(){
@@ -77,7 +61,7 @@ export default class Hologram {
 				appearance: { meshId: buttonMesh.id },
 				collider: { geometry: { shape: MRE.ColliderType.Auto } },
 				transform: {
-					local: { position: { x: 0, y : -.1, z: 0 } }
+					local: { position: { x: 0, y : -1, z: 0 } }
 				}
 			}
 		});
@@ -86,8 +70,6 @@ export default class Hologram {
 	}
 
 	private loadFromOldWorld(){
-		this.data = this.Universe[this.context.sessionId];
-		console.log("Loading world data : " + JSON.stringify(this.data).toString());
 		// creates in a world from old world data
 		this.self = MRE.Actor.Create(this.context, {
 			actor: {
@@ -149,35 +131,36 @@ export default class Hologram {
 
 
 	private async OnConfig(userID : MRE.Guid){
-		if(this.data == undefined){
+		if(this.auth.getData() == undefined){
 			// first time initialization
-			this.data = ({} as WorldData);
-			this.data.owner = userID.toString();
-			
+			let data = ({} as WorldData);
+			data.owner = userID.toString();
 			// prompt for the user's initial data.
 
 			// Save data
-			console.log("Creating world data : " + JSON.stringify(this.data).toString());
-			this.saveData();
+			console.log("Creating world data : " + JSON.stringify(data).toString());
+			this.auth.setData(data); // set data to new world data
+			this.auth.save();
+			//this.saveData();
 			// Update the owner
-			this.getUser(this.data.owner).prompt("World has been sucessfully registered. Feel free to configure further. AS the owner, you have sole rights to configure this MRE, but if you add admins, they will have access to configure as well.");	
+			this.getUser(data.owner).prompt("World has been sucessfully registered. Feel free to configure further. AS the owner, you have sole rights to configure this MRE, but if you add admins, they will have access to configure as well.");	
+			this.initWorldData(); // reload object
 		}else{
 			// configuration management post init
 			let access : AccessLevel;
 			access = this.getAccessLevelGuid(userID);
 			if(access == AccessLevel.Deny){
-				this.getUser(userID.toString()).prompt("You do not have access to configure this object. Feel free to ask \"" + this.getUser(this.data.owner).name + "\" to list you as an admin if you think you shouold have access to configure this object.");
+				this.getUser(userID.toString()).prompt("You do not have access to configure this object. Feel free to ask \"" + this.getUser(this.auth.getData().owner).name + "\" to list you as an admin if you think you shouold have access to configure this object.");
 				return;
 			}
 
 			let s : string;
-			let user : MRE.User = this.getUser(this.data.owner);
+			let user : MRE.User = this.getUser(this.auth.getData().owner);
 			s = (await user.prompt("Should rotate?", true)).text;
 			let flag : Boolean;
 			flag = eval(s); // evaluate a bool from the inpt
 			if(flag){
 				// start anim
-
 			}else{	
 				// stop anim
 
@@ -213,30 +196,6 @@ export default class Hologram {
 	}
 
 
-	private async saveData(){
-		let flag = false;
-		let data : string = JSON.stringify(this.data, null, 4);
-		console.log("Writing data : " + data);
-		if(await this.writeData(saveFile, data)) flag = true;
-//		if(await this.writeData("data.json", data)) flag = true;
-//		if(await this.writeData("../data.json", data)) flag = true;
-//		if(await this.writeData("../public/data.json", data)) flag = true;
-//		if(await this.writeData("../built/data.json", data)) flag = true;
-		console.log("File saved successfully? " + flag);
-		let s : string;
-		s = await this.readData("data.json");
-		if(s) console.log("Check data : " + s);
-	}
-
-	private async writeData(path : string, data : string) : Promise<boolean> {
-		fs.writeFileSync(saveFile, data);
-		return false;
-	}
-
-	private async readData(path : string) : Promise<string> {
-		return await fs.readFileSync(path);
-	}
-
 	private  getGUID(s_guid : string) : Guid {
 		return parseGuid(s_guid);
 	}
@@ -245,14 +204,7 @@ export default class Hologram {
 		return this.context.user(this.getGUID(s_guid));
 	}
 
-	private getAccessLevel(s_guid : string) : AccessLevel {
-		if(this.data.owner == s_guid) return AccessLevel.Owner; // owner rights
-		for (let s of this.data.admins){
-			if(s == s_guid) return AccessLevel.Admin; // admin rights
-		}
-		return AccessLevel.Deny; // no rights
-	}
 
-	private getAccessLevelGuid(guid : Guid) : AccessLevel { return this.getAccessLevel(guid.toString());};
+	private getAccessLevelGuid(guid : Guid) : AccessLevel { return this.auth.getAccessLevel(guid.toString());};
 
 }
