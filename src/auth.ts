@@ -21,7 +21,7 @@ export default class Authenticator {
     }
 
     public getData() : WorldData {
-        if(this.appData) return undefined; // still loading
+        if(this.appData == undefined || this.appData == null) return undefined; // still loading
         return this.appData.data;
     }
     public setData(d : WorldData){
