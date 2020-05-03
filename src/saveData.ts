@@ -19,7 +19,7 @@ export interface UniverseData {
 const file = require("fs");
 
 
-export default class AppData {
+export class AppData {
     private path : string;
 
     public data : WorldData; // store the data here.

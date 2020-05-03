@@ -1,6 +1,6 @@
 
 
-import AppData from "./saveData";
+import {AppData, WorldData} from "./saveData";
 
 
 export default class Auth {
@@ -20,9 +20,9 @@ export default class Auth {
         console.log(this.data.data)
     }
 
-    public getData(key : string ) : any {
+    public getData() : WorldData {
         if(this.data) return undefined; // still loading
-        return this.data.getData(key);
+        return this.data.data;
     }
 
 
