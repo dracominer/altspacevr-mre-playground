@@ -1,6 +1,6 @@
 
 
-import {AppData} from "./saveData";
+import AppData from "./saveData";
 
 
 export default class Auth {
